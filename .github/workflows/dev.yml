@@ -1,12 +1,61 @@
-name: qbworkflow
+name: Laravel CI
 
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - develop
+      - feature/**
+  pull_request:
+    branches:
+      - develop
 
 jobs:
-  jobstart:
-    runs-on: ubuntu-22.04
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: testing
+        ports:
+          - 3306:3306
 
     steps:
-      - name: step1
-        run: ls
+
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: 8.3
+
+      - uses: actions/cache@v4
+        with:
+          path: vendor
+          key: composer-${{ hashFiles('composer.lock') }}
+
+      - run: composer install --prefer-dist --no-progress
+
+      - run: cp .env.example .env
+
+      - run: php artisan key:generate
+
+      - run: php artisan migrate
+
+      - run: php artisan db:seed
+
+      - run: php artisan test
+
+      - run: ./vendor/bin/pint --test
+
+      - run: ./vendor/bin/phpstan analyse
+
+      - run: composer audit
+
+      - run: zip -r release.zip .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build
+          path: release.zip
